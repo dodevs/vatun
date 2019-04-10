@@ -74,8 +74,8 @@ func readerFunc(tap tuntap.Interface, conn net.Conn) {
 }
 
 func configClient(ctx context.Context, cancel context.CancelFunc, tap tuntap.Interface, pair string) {
-	log.Printf("Configurando o IP %s da interface %s\n", "10.0.0.2/30", tap.Name())
-	cmd := exec.CommandContext(ctx, "ip", "addr", "add", "10.0.0.2/30", "dev", tap.Name())
+	log.Printf("Configurando o IP %s da interface %s\n", "10.253.0.2/30", tap.Name())
+	cmd := exec.CommandContext(ctx, "ip", "addr", "add", "10.253.0.2/30", "dev", tap.Name())
 	err := cmd.Run()
 	if err != nil {
 		log.Println("Erro ao tentar configurar IP da interface", err)
@@ -114,8 +114,8 @@ func configClient(ctx context.Context, cancel context.CancelFunc, tap tuntap.Int
 }
 
 func configServer(ctx context.Context, cancel context.CancelFunc, tap tuntap.Interface, pair string) {
-	log.Printf("Configurando o IP %s da interface %s\n", "10.0.0.1/30", tap.Name())
-	cmd := exec.CommandContext(ctx, "ip", "addr", "add", "10.0.0.1/30", "dev", tap.Name())
+	log.Printf("Configurando o IP %s da interface %s\n", "10.253.0.1/30", tap.Name())
+	cmd := exec.CommandContext(ctx, "ip", "addr", "add", "10.253.0.1/30", "dev", tap.Name())
 	err := cmd.Run()
 	if err != nil {
 		log.Println("Erro ao tentar configurar IP da interface", err)
