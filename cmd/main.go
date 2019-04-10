@@ -73,30 +73,40 @@ func readerFunc(tap tuntap.Interface, conn net.Conn) {
 	}
 }
 
-func configClient(ctx context.Context, cancel context.CancelFunc, tap tuntap.Interface, pair string) {
-	log.Printf("Configurando o IP %s da interface %s\n", "10.253.0.2/30", tap.Name())
-	cmd := exec.CommandContext(ctx, "ip", "addr", "add", "10.253.0.2/30", "dev", tap.Name())
-	err := cmd.Run()
+func getTap(ctx context.Context, ip, name string) (tuntap.Interface, error) {
+	tap, err := tuntap.Tun(name)
 	if err != nil {
-		log.Println("Erro ao tentar configurar IP da interface", err)
-		cancel()
-		return
+		return nil, err
+	}
+
+	log.Printf("Configurando o IP %s da interface %s\n", ip, tap.Name())
+	cmd := exec.CommandContext(ctx, "ip", "addr", "add", ip, "dev", tap.Name())
+	err = cmd.Run()
+	if err != nil {
+		return nil, err
 	}
 
 	log.Printf("Subindo a interface %s\n", tap.Name())
 	cmd = exec.CommandContext(ctx, "ip", "link", "set", "up", "dev", tap.Name())
 	err = cmd.Run()
 	if err != nil {
-		log.Println("Erro ao tentar subir interface", err)
-		cancel()
-		return
+		return nil, err
 	}
 
 	log.Printf("Configurando a interface %s com MTU de %d bytes\n", tap.Name(), MTU)
 	cmd = exec.CommandContext(ctx, "ip", "link", "set", "mtu", strconv.Itoa(MTU), "dev", tap.Name())
 	err = cmd.Run()
 	if err != nil {
-		log.Println("Erro ao tentar configurar MTU da interface", err)
+		return nil, err
+	}
+
+	return tap, nil
+}
+
+func configClient(ctx context.Context, cancel context.CancelFunc, pair string) {
+	tap, err := getTap(ctx, "10.253.0.2/30", "")
+	if err != nil {
+		log.Println(err)
 		cancel()
 		return
 	}
@@ -106,37 +116,19 @@ func configClient(ctx context.Context, cancel context.CancelFunc, tap tuntap.Int
 	if err != nil {
 		log.Println(err)
 		cancel()
+		return
 	}
+
 	log.Printf("Conexão efetuada com sucesso\n")
 
 	go writerFunc(tap, conn)
 	go readerFunc(tap, conn)
 }
 
-func configServer(ctx context.Context, cancel context.CancelFunc, tap tuntap.Interface, pair string) {
-	log.Printf("Configurando o IP %s da interface %s\n", "10.253.0.1/30", tap.Name())
-	cmd := exec.CommandContext(ctx, "ip", "addr", "add", "10.253.0.1/30", "dev", tap.Name())
-	err := cmd.Run()
+func configServer(ctx context.Context, cancel context.CancelFunc, pair string) {
+	tap, err := getTap(ctx, "10.253.0.1/30", "")
 	if err != nil {
-		log.Println("Erro ao tentar configurar IP da interface", err)
-		cancel()
-		return
-	}
-
-	log.Printf("Subindo a interface %s\n", tap.Name())
-	cmd = exec.CommandContext(ctx, "ip", "link", "set", "up", "dev", tap.Name())
-	err = cmd.Run()
-	if err != nil {
-		log.Println("Erro ao tentar configurar MTU da interface", err)
-		cancel()
-		return
-	}
-
-	log.Printf("Configurando a interface %s com MTU de %d bytes\n", tap.Name(), MTU)
-	cmd = exec.CommandContext(ctx, "ip", "link", "set", "mtu", strconv.Itoa(MTU), "dev", tap.Name())
-	err = cmd.Run()
-	if err != nil {
-		log.Println("Erro ao tentar configurar MTU da interface", err)
+		log.Println(err)
 		cancel()
 		return
 	}
@@ -178,8 +170,11 @@ func main() {
 
 	MTU = *mtu
 
-	if (*s && *c) || (!*s && !*c) {
-		panic("O programa só pode ser comportar ou como servidor ou cliente por vez")
+	if *s && *c {
+		panic("O programa só pode ser comportar ou como servidor ou cliente por vez.\nExecute passando -help como parâmetro para mais informações.")
+	}
+	if !*s && !*c {
+		panic("Defina se o programa se comportará como servidor ou cliente.\nExecute passando -help como parâmetro para mais informações.")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -191,17 +186,10 @@ func main() {
 
 	go sigHandler(ctx, cancel, chanSig, &wg)
 
-	tap, err := tuntap.Tun("")
-	if err != nil {
-		log.Println(err)
-		cancel()
-		return
-	}
-
 	if *s {
-		go configServer(ctx, cancel, tap, *pair)
+		go configServer(ctx, cancel, *pair)
 	} else {
-		go configClient(ctx, cancel, tap, *pair)
+		go configClient(ctx, cancel, *pair)
 	}
 
 	log.Println("Esperando finalização...")
