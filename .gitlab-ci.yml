@@ -1,0 +1,11 @@
+stages:
+  - build
+  - test
+
+build_code:
+  stage: build
+  script: ./build.sh
+
+test_bin:
+  stage: test
+  script: ./test.sh
