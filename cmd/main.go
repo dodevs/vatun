@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -45,28 +46,14 @@ func sigHandler(ctx context.Context, cancel context.CancelFunc, chanSig chan os.
 	}
 }
 
-func writerFunc(tap tuntap.Interface, conn net.Conn) {
-	packet := make([]byte, MTU)
+func forwarder(src io.Reader, dst io.Writer, bufsize uint16) {
+	data := make([]byte, MTU)
 	for {
-		_, err := conn.Read(packet)
+		_, err := src.Read(data)
 		if err != nil {
 			panic(err)
 		}
-		_, err = tap.Write(packet)
-		if err != nil {
-			panic(err)
-		}
-	}
-}
-
-func readerFunc(tap tuntap.Interface, conn net.Conn) {
-	packet := make([]byte, MTU)
-	for {
-		_, err := tap.Read(packet)
-		if err != nil {
-			panic(err)
-		}
-		_, err = conn.Write(packet)
+		_, err = dst.Write(data)
 		if err != nil {
 			panic(err)
 		}
@@ -121,8 +108,8 @@ func configClient(ctx context.Context, cancel context.CancelFunc, pair string) {
 
 	log.Printf("Conexão efetuada com sucesso\n")
 
-	go writerFunc(tap, conn)
-	go readerFunc(tap, conn)
+	go forwarder(tap, conn, uint16(MTU))
+	go forwarder(conn, tap, uint16(MTU))
 }
 
 func configServer(ctx context.Context, cancel context.CancelFunc, pair string) {
@@ -150,8 +137,8 @@ func configServer(ctx context.Context, cancel context.CancelFunc, pair string) {
 
 	log.Printf("Conexão aceita: %s\n", conn.RemoteAddr().String())
 
-	go writerFunc(tap, conn)
-	go readerFunc(tap, conn)
+	go forwarder(tap, conn, uint16(MTU))
+	go forwarder(conn, tap, uint16(MTU))
 }
 
 func main() {
