@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -60,10 +61,20 @@ func forwarder(src io.Reader, dst io.Writer, bufsize uint16) {
 	}
 }
 
-func getTap(ctx context.Context, ip, name string) (tuntap.Interface, error) {
-	tap, err := tuntap.Tun(name)
-	if err != nil {
-		return nil, err
+func getTap(ctx context.Context, ip, name string, tuntype string) (tuntap.Interface, error) {
+	var tap tuntap.Interface
+	var err error
+
+	if tuntype == "tun" {
+		tap, err = tuntap.Tun(name)
+		if err != nil {
+			return nil, err
+		}
+	} else if tuntype == "tap" {
+		tap, err = tuntap.Tap(name)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	log.Printf("Configurando o IP %s da interface %s\n", ip, tap.Name())
@@ -90,8 +101,8 @@ func getTap(ctx context.Context, ip, name string) (tuntap.Interface, error) {
 	return tap, nil
 }
 
-func configClient(ctx context.Context, cancel context.CancelFunc, pair string) {
-	tap, err := getTap(ctx, "10.253.0.2/30", "")
+func configClient(ctx context.Context, cancel context.CancelFunc, pair string, tuntype string) {
+	tap, err := getTap(ctx, "10.253.0.2/30", "", tuntype)
 	if err != nil {
 		log.Println(err)
 		cancel()
@@ -112,8 +123,8 @@ func configClient(ctx context.Context, cancel context.CancelFunc, pair string) {
 	go forwarder(conn, tap, uint16(MTU))
 }
 
-func configServer(ctx context.Context, cancel context.CancelFunc, pair string) {
-	tap, err := getTap(ctx, "10.253.0.1/30", "")
+func configServer(ctx context.Context, cancel context.CancelFunc, pair string, tuntype string) {
+	tap, err := getTap(ctx, "10.253.0.1/30", "", tuntype)
 	if err != nil {
 		log.Println(err)
 		cancel()
@@ -148,8 +159,13 @@ func main() {
 	c := flag.Bool("c", false, "Use essa flag para efetuar uma conexão")
 	pair := flag.String("ip", "0.0.0.0:80", "Ip e porta para se conectar ou escutar, no formato <ip>:<porta>")
 	mtu := flag.Int("mtu", 1500, "Define o mtu da interface tun")
+	tuntype := flag.String("tun-type", "tun", "Define se a interface criada será tun ou tap")
 
 	flag.Parse()
+
+	if strings.ToUpper(*tuntype) != "TUN" && strings.ToUpper(*tuntype) != "TAP" {
+		panic("O tipo de interface deve ser tun ou tap!")
+	}
 
 	if *mtu < 0 {
 		panic("O MTU da interface não pode ser negativo!")
@@ -174,9 +190,9 @@ func main() {
 	go sigHandler(ctx, cancel, chanSig, &wg)
 
 	if *s {
-		go configServer(ctx, cancel, *pair)
+		go configServer(ctx, cancel, *pair, strings.ToLower(*tuntype))
 	} else {
-		go configClient(ctx, cancel, *pair)
+		go configClient(ctx, cancel, *pair, strings.ToLower(*tuntype))
 	}
 
 	log.Println("Esperando finalização...")
