@@ -47,15 +47,15 @@ func sigHandler(ctx context.Context, cancel context.CancelFunc, chanSig chan os.
 }
 
 func forwarder(src io.Reader, dst io.Writer, bufsize uint16) {
-	data := make([]byte, MTU)
+	data := make([]byte, bufsize)
 	for {
 		_, err := src.Read(data)
 		if err != nil {
-			panic(err)
+			return
 		}
 		_, err = dst.Write(data)
 		if err != nil {
-			panic(err)
+			return
 		}
 	}
 }
